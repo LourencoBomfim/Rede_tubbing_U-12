@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Potes de distribuição de ar · U-12</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#e9edf2;--card:#fff;--bd:#cdd5e3;--tx:#18213a;--mut:#58637f;--ac:#1f5fd6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10172a;--card:#1f2842;--bd:#313c5c;--tx:#eef2fb;--mut:#8f9bb8;--ac:#6ea8ff}}
+:root[data-theme="dark"]{--bg:#10172a;--card:#1f2842;--bd:#313c5c;--tx:#eef2fb;--mut:#8f9bb8;--ac:#6ea8ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Segoe UI",system-ui,Arial,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--bd)}
+header h1{font-size:17px;margin:0}header small{color:var(--mut);display:block;font-size:11px}
+.chip,.tabs button{font:inherit;font-size:13px;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:99px;padding:6px 14px;cursor:pointer}
+.chip.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 20px;font-size:12px;color:var(--mut)}
+.bar .sum span{background:var(--card);border:1px solid var(--bd);padding:3px 11px;border-radius:99px;color:var(--tx);margin-right:6px}
+.dot{display:inline-block;width:11px;height:11px;border:1px solid #000;margin-right:5px;vertical-align:-1px}
+.own{display:flex;gap:12px;align-items:center;padding:8px 20px;font-size:12px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+[hidden]{display:none!important}
+main{padding:6px 20px 40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.pot{background:#fff;border:1px solid #b9c2d0;border-radius:4px;padding:4px}
+.pot svg{width:100%;height:auto;display:block}
+.vg{cursor:default}body:not(.ro) .vg{cursor:pointer}
+.vg:hover polygon{stroke-width:2.4}
+.note{font-size:11px;color:var(--mut);margin-top:16px}
+</style>
+</head>
+<body class="ro">
+<header><div><h1>Potes de distribuição de ar · U-12</h1><small>20 PDAs e 24 stand pipes · DE-5290.00-22111-800-CHZ-113 / 944-JEI-009</small></div>
+<div style="margin-left:auto"><button class="chip" id="bx" hidden="">Baixar Excel</button></div></header>
+<div class="own" id="own" hidden=""><b>Modo edição (somente você)</b><button class="chip" id="bi">Importar Excel</button><input type="file" id="fi" accept=".xlsx" hidden=""><span id="msg"></span></div>
+<div class="bar"><span id="flt"></span><span class="sum" id="gsum"></span>
+<span><i class="dot" style="background:#f87171"></i>Não montado</span><span><i class="dot" style="background:#fbbf24"></i>Em andamento</span><span><i class="dot" style="background:#2dd4bf"></i>Montado</span><span id="hint">Visualização somente leitura.</span></div>
+<main><div class="grid" id="grid"></div>
+<p class="note">Cor da válvula = status de montagem do tag. Nos PDAs, a cor da válvula de entrada é o status do header e o tom do vaso é o status do PDA. Tags dos stand pipes (exceto o A) lidos de desenho em baixa resolução: conferir no original.</p></main>
+<script id="data" type="application/json">{"pda":[],"sp":[]}</script>
+<script>
+var ST=[{t:"Não montado",c:"#f87171"},{t:"Em andamento",c:"#fbbf24"},{t:"Montado",c:"#2dd4bf"}];
+function $(i){return document.getElementById(i)}
+var D=JSON.parse($("data").textContent),PD=D.pda,SP=D.sp,flt="pda",reg=[],canEdit=false,art=null,dl=null,timer=null;
+function kind(t){return t.split("-")[0]}
+function desc(t){var p=kind(t);return p==="XV"?"Válvula liga/desliga":(p==="SY"||p==="XY")?"Solenóide":p==="AIT"?"Instrumento de campo":"Válvula de controle"}
+function esc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
+function col(s){return s<0?"#fff":ST[s].c}
+function rg(o,f){reg.push({o:o,f:f});return reg.length-1}
+function vH(cx,y,c){var k=' fill="'+c+'" stroke="#000" stroke-width="1.3"/>';return'<polygon points="'+(cx-10)+','+(y-7)+' '+(cx-10)+','+(y+7)+' '+cx+','+y+'"'+k+'<polygon points="'+(cx+10)+','+(y-7)+' '+(cx+10)+','+(y+7)+' '+cx+','+y+'"'+k}
+function vV(cx,y,c){var k=' fill="'+c+'" stroke="#000" stroke-width="1.3"/>';return'<polygon points="'+(cx-7)+','+(y-10)+' '+(cx+7)+','+(y-10)+' '+cx+','+y+'"'+k+'<polygon points="'+(cx-7)+','+(y+10)+' '+(cx+7)+','+(y+10)+' '+cx+','+y+'"'+k}
+function pot(o){
+ var n=Math.max(o.L.length,o.R.length+(o.blank?1:0),3),sp=36,y0=146,bot=y0+(n-1)*sp+34,all=o.L.concat(o.R),cn=[0,0,0],m=0;
+ all.forEach(function(x){cn[x.s]++;m+=x.m||0});
+ var s='<svg viewBox="0 -24 460 '+(bot+152)+'" xmlns="http://www.w3.org/2000/svg" font-family="Arial,Helvetica,sans-serif" fill="#000" stroke="#000" stroke-width="1.6">';
+ var hv=o.vs!=null&&o.vs>=0;
+ s+='<g'+(o.vk!=null?' class="vg" data-k="'+o.vk+'"':'')+'><title>'+esc(o.name)+(hv?" · "+ST[o.vs].t:"")+'</title><path d="M170 130C170 110 195 102 230 102S290 110 290 130L290 '+bot+'C290 '+(bot+20)+' 265 '+(bot+28)+' 230 '+(bot+28)+'S170 '+(bot+20)+' 170 '+bot+'Z" fill="#fff" stroke-width="1.8"/>'+
+  (hv?'<path d="M170 130C170 110 195 102 230 102S290 110 290 130L290 '+bot+'C290 '+(bot+20)+' 265 '+(bot+28)+' 230 '+(bot+28)+'S170 '+(bot+20)+' 170 '+bot+'Z" fill="'+ST[o.vs].c+'" fill-opacity=".28" stroke="none"/>':'')+'</g>';
+ s+='<line x1="230" y1="-24" x2="230" y2="102"/>';
+ s+='<g'+(o.hk!=null?' class="vg" data-k="'+o.hk+'"':'')+'><title>Válvula de entrada'+(o.hs>=0?" · "+ST[o.hs].t:"")+'</title>'+vV(230,60,col(o.hs))+'</g>';
+ s+='<text transform="translate(219,44) rotate(-90)" font-size="9" stroke="none">'+esc(o.feed)+'</text>';
+ s+='<line x1="230" y1="60" x2="300" y2="60" stroke-width="1.2"/><circle cx="300" cy="60" r="4" stroke="none"/><line x1="300" y1="56" x2="300" y2="34" stroke-width="1.2"/><polygon points="300,26 295,38 305,38" stroke="none"/><line x1="300" y1="64" x2="300" y2="86" stroke-width="1.2"/><polygon points="300,94 295,82 305,82" stroke="none"/><text x="314" y="38" font-size="13" stroke="none">Ac</text><text x="314" y="92" font-size="13" stroke="none">Inox 316</text>';
+ s+='<text x="10" y="96" font-size="12" stroke="none">'+esc(o.label)+'</text>';
+ for(var i=0;i<n;i++){var y=y0+i*sp,l=o.L[i],r=o.R[i];
+  if(l)s+='<g class="vg" data-k="'+rg(l,"s")+'"><title>'+esc(l.tag+" · "+ST[l.s].t+(l.m?" · ~"+l.m+" m":""))+'</title><rect x="0" y="'+(y-15)+'" width="170" height="30" fill="transparent" stroke="none"/><line x1="170" y1="'+y+'" x2="125" y2="'+y+'" stroke-width="1.2"/>'+vH(150,y,col(l.s))+'<text x="118" y="'+(y+4)+'" text-anchor="end" font-size="13" stroke="none">'+esc(l.tag)+'</text></g>';
+  if(r)s+='<g class="vg" data-k="'+rg(r,"s")+'"><title>'+esc(r.tag+" · "+ST[r.s].t+(r.m?" · ~"+r.m+" m":""))+'</title><rect x="290" y="'+(y-15)+'" width="170" height="30" fill="transparent" stroke="none"/><line x1="290" y1="'+y+'" x2="335" y2="'+y+'" stroke-width="1.2"/>'+vH(310,y,col(r.s))+'<text x="342" y="'+(y+4)+'" font-size="13" stroke="none">'+esc(r.tag)+'</text></g>';
+  else if(o.blank&&i===o.R.length)s+='<line x1="290" y1="'+y+'" x2="335" y2="'+y+'" stroke-width="1.2"/>'+vH(310,y,"#fff");
+ }
+ s+='<line x1="230" y1="'+(bot+28)+'" x2="230" y2="'+(bot+76)+'"/>'+vV(230,bot+52,"#fff")+'<line x1="223" y1="'+(bot+76)+'" x2="237" y2="'+(bot+76)+'" stroke-width="1.2"/><line x1="226" y1="'+(bot+80)+'" x2="234" y2="'+(bot+80)+'" stroke-width="1.2"/>';
+ s+='<text x="230" y="'+(bot+108)+'" text-anchor="middle" font-size="16" text-decoration="underline" stroke="none">'+esc(o.name)+'</text>';
+ s+='<text x="230" y="'+(bot+126)+'" text-anchor="middle" font-size="10" fill="#666" stroke="none">'+cn[2]+'/'+all.length+' montados'+(m?' · ~'+m+' m':'')+'</text></svg>';
+ return'<div class="pot">'+s+'</div>'}
+function draw(){reg=[];var h="",ca=[0,0,0],cb=[0,0,0];
+ PD.forEach(function(p){var a=[].concat.apply([],p.rows),nl=Math.ceil(a.length/2);a.forEach(function(x){ca[x.s]++});
+  if(flt==="pda")h+=pot({name:p.n,label:p.z+" · EL. "+p.el,feed:"AR DE INSTRUMENTOS",L:a.slice(0,nl),R:a.slice(nl),hs:p.h,hk:rg(p,"h"),vs:p.v,vk:rg(p,"v")})});
+ SP.forEach(function(p){p.t.forEach(function(x){cb[x.s]++});
+  if(flt==="sp")h+=pot({name:"STAND PIPE "+p.id,label:"F-12001"+p.f,feed:'1"–AI–12–05',L:p.t.slice(0,p.nl),R:p.t.slice(p.nl),blank:p.blank,hs:-1})});
+ $("grid").innerHTML=h;
+ function sm(c){return c[2]+" montados · "+c[1]+" em andamento · "+c[0]+" não montados"}
+ $("gsum").innerHTML=flt==="pda"?'<span><b>20 PDAs</b> · '+sm(ca)+'</span>':'<span><b>24 stand pipes</b> · '+sm(cb)+'</span>';
+ var f="";[["pda","PDAs"],["sp","Stand pipes"]].forEach(function(o){f+='<button class="chip'+(flt===o[0]?" on":"")+'" data-f="'+o[0]+'">'+o[1]+'</button> '});$("flt").innerHTML=f}
+function msg(t){var e=$("msg");if(e)e.textContent=t||""}
+function buildHtml(){var c=document.documentElement.cloneNode(true);
+ ["grid","gsum","flt"].forEach(function(i){c.querySelector("#"+i).innerHTML=""});
+ c.querySelector("#data").textContent=JSON.stringify(D).replace(/<\//g,"<\\/");
+ c.querySelector("body").className="ro";c.querySelector("#own").hidden=true;c.querySelector("#bx").hidden=true;
+ c.querySelector("#hint").textContent="Visualização somente leitura.";c.querySelector("#msg").textContent="";
+ return"<!DOCTYPE html>\n"+c.outerHTML}
+function commit(){if(!art)return;msg("Salvando…");clearTimeout(timer);timer=setTimeout(pub,1500)}
+async function pub(){try{await art.publish(buildHtml())}catch(e){var c=e&&e.code;if(c==="not_writer"||c==="not_granted"){canEdit=false;document.body.classList.add("ro");msg("Somente leitura: sem permissão para salvar.")}else if(c!=="conflict")msg("Não foi possível salvar ("+(c||"erro")+").")}}
+function norm(x){return String(x==null?"":x).trim().toLowerCase()}
+function st(x,h){var n=norm(x);if(n==="montado")return 2;if(n.indexOf("andamento")>=0)return 1;if(h&&(n===""||n.indexOf("vis")>=0))return -1;return 0}
+function rowsOf(W,n){var w=W.Sheets[n];if(!w)throw new Error("aba ausente: "+n);return XLSX.utils.sheet_to_json(w,{defval:""})}
+function importWb(W){
+ var Pp=rowsOf(W,"PDAs"),T=rowsOf(W,"Tags_PDA"),S=rowsOf(W,"StandPipes"),pda=[],map={};
+ Pp.forEach(function(r){var n=String(r["PDA"]).trim();if(!n)return;var o={n:n,z:String(r["Zona"]),el:Number(r["Elevação"])||0,len:Number(r["Metragem PDA (m)"])||0,h:st(r["Status header"],1),v:Math.max(0,st(r["Status vaso"])),rows:[]};map[n]=o;pda.push(o)});
+ T.forEach(function(r){var o=map[String(r["PDA"]).trim()],tag=String(r["TAG"]).trim();if(!o||!tag)return;var li=Math.max(1,Number(r["Linha"])||1)-1;while(o.rows.length<=li)o.rows.push([]);o.rows[li].push({tag:tag,s:Math.max(0,st(r["Status"])),m:Number(r["Metragem (m)"])||0})});
+ pda.forEach(function(o){o.rows=o.rows.filter(function(r){return r.length})});
+ var sps=[],sm={};
+ S.forEach(function(r){var id=String(r["Stand Pipe"]).trim(),tag=String(r["TAG"]).trim();if(!id||!tag)return;var o=sm[id];
+  if(!o){var old=SP.filter(function(q){return q.id===id})[0];o={id:id,row:Number(r["Fileira"])||1,f:/B\s*$/i.test(String(r["Forno"]))?"B":"A",l:[],r:[],blank:!!(old&&old.blank)};sm[id]=o;sps.push(o)}
+  var m=r["Metragem (m)"],x={tag:tag,s:Math.max(0,st(r["Status"])),m:m===""?null:Number(m)};(/^e/i.test(String(r["Lado"]).trim())?o.l:o.r).push(x)});
+ sps.forEach(function(o){o.t=o.l.concat(o.r);o.nl=o.l.length;delete o.l;delete o.r});
+ if(!pda.length||!sps.length)throw new Error("planilha sem dados");
+ D.pda=PD=pda;D.sp=SP=sps;draw();commit()}
+function wbOut(){var W=XLSX.utils.book_new(),a=[["PDA","Zona","Elevação","Metragem PDA (m)","Status header","Status vaso"]],b=[["PDA","Linha","TAG","Tipo","Descrição","Metragem (m)","Status"]],c=[["Stand Pipe","Forno","Fileira","Lado","TAG","Metragem (m)","Status"]];
+ PD.forEach(function(p){a.push([p.n,p.z,p.el,p.len,p.h<0?"Não visível":ST[p.h].t,ST[p.v].t]);p.rows.forEach(function(r,i){r.forEach(function(x){b.push([p.n,i+1,x.tag,kind(x.tag),desc(x.tag),x.m,ST[x.s].t])})})});
+ SP.forEach(function(p){p.t.forEach(function(x,j){c.push([p.id,"F-12001"+p.f,p.row,j<p.nl?"Esquerda":"Direita",x.tag,x.m==null?"":x.m,ST[x.s].t])})});
+ XLSX.utils.book_append_sheet(W,XLSX.utils.aoa_to_sheet(a),"PDAs");XLSX.utils.book_append_sheet(W,XLSX.utils.aoa_to_sheet(b),"Tags_PDA");XLSX.utils.book_append_sheet(W,XLSX.utils.aoa_to_sheet(c),"StandPipes");return W}
+async function exportXlsx(){try{var o=XLSX.write(wbOut(),{type:"array",bookType:"xlsx"});await dl.save({filename:"controle_tubing_U12.xlsx",data:new Blob([o],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})})}catch(e){}}
+document.addEventListener("click",function(e){var b;
+ if(b=e.target.closest(".vg")){if(!canEdit)return;var q=reg[+b.dataset.k];if(!q)return;var v=q.o[q.f];q.o[q.f]=v>=2?0:v+1;commit();draw();return}
+ if(b=e.target.closest("[data-f]")){flt=b.dataset.f;draw();return}
+ if(e.target.closest("#bx")){exportXlsx();return}
+ if(e.target.closest("#bi")){if(canEdit)$("fi").click()}
+});
+if($("fi"))$("fi").onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{importWb(XLSX.read(r.result,{type:"array"}));msg("Planilha importada. Salvando…")}catch(x){msg("Erro na importação: "+x.message)}};r.readAsArrayBuffer(f);e.target.value=""};
+draw();
+fetch("data.json?v="+Date.now()).then(function(r){return r.json()}).then(function(d){D=d;PD=d.pda;SP=d.sp;draw()}).catch(function(){$("hint").textContent="Não foi possível carregar data.json."});
+</script>
+</body>
+</html>
